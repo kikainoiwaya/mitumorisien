@@ -35,7 +35,7 @@
             <svg class="w-8 h-8 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
             </svg>
-            AI文字起こし ➔ スプレッドシート変換（表対応版）
+            AI文字起こし ➔ スプレッドシート変換（完全単一ファイル版）
         </h1>
 
         <div id="dropZone" class="mb-6 border-2 border-dashed border-gray-300 rounded-lg p-8 text-center transition-colors duration-200 cursor-pointer hover:border-green-500">
@@ -56,7 +56,7 @@
         <div class="mb-6">
             <label class="block text-sm font-medium text-gray-700 mb-2 font-bold text-green-700">1. 解析・編集エリア</label>
             <textarea id="inputArea" class="w-full h-48 p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-y font-mono text-sm overflow-x-auto" placeholder="解析結果がここに表示されます..."></textarea>
-            <p class="mt-1 text-xs text-gray-500">※表形式の場合、AIが自動で列（タブ区切り）を作成します。</p>
+            <p class="mt-1 text-xs text-gray-500">※表形式の場合、AIが自動で列（タブ区切り）を作成します。必要に応じてここで手動調整も可能です。</p>
         </div>
 
         <div class="flex gap-4 mb-8">
@@ -73,17 +73,19 @@
             <div id="output" class="border border-gray-200 rounded-lg overflow-x-auto bg-gray-50 text-sm">
                 <!-- ここにtableが生成される -->
             </div>
-            <p class="mt-2 text-xs text-gray-500 italic font-medium text-blue-600">※「スプレッドシート用にコピー」を押すと、表の列が分かれた状態で貼り付け可能です。</p>
+            <p class="mt-2 text-xs text-gray-500 italic font-medium text-blue-600">※「スプレッドシート用にコピー」ボタンを押すと、クリップボードに表形式データが保持されます。</p>
         </div>
     </div>
 
     <script>
+        // API key will be provided by the environment
         const apiKey = "";
         const fileInput = document.getElementById('fileInput');
         const dropZone = document.getElementById('dropZone');
         const inputArea = document.getElementById('inputArea');
         const loader = document.getElementById('loader');
 
+        // File drop and input handling
         dropZone.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
 
@@ -115,12 +117,12 @@
 
         async function performAIOCR(base64Data, mimeType) {
             const prompt = `
-            ドキュメントを解析し、スプレッドシート形式のテキストで出力してください。
-            【厳守ルール】
-            1. 表の列の間には、必ず「実際のタブ文字(ASCII 0x09)」を挿入してください。
-            2. 各データ行は1行にまとめてください。
-            3. 表形式が複雑な場合でも、一貫した列数で出力してください。
-            4. 解説文は一切不要です。内容のみ出力してください。
+            Analyze this document and extract the text in a format suitable for spreadsheets.
+            [CRITICAL RULES]
+            1. Use a TAB character (ASCII 0x09) as a column separator for tables. Do NOT write out "\\t".
+            2. Each data row must be on a single line.
+            3. Ensure consistent column counts even for complex table layouts.
+            4. Provide ONLY the extracted text. No explanations or greetings.
             `;
             
             let retries = 0;
@@ -141,34 +143,40 @@
                         })
                     });
 
+                    if (!response.ok) throw new Error("API request failed");
+
                     const result = await response.json();
                     let rawText = result.candidates?.[0]?.content?.parts?.[0]?.text || "";
                     
-                    // 文字としての \t を本物のタブ文字に置換
+                    // Replace literal "\t" strings with actual tab characters if the AI made a mistake
                     rawText = rawText.replace(/\\t/g, '\t');
                     
+                    // Remove markdown code blocks if present
                     return rawText.replace(/```[a-z]*\n/gi, '').replace(/```/g, '').trim();
                 } catch (err) {
                     await new Promise(res => setTimeout(res, delays[retries]));
                     retries++;
                 }
             }
-            throw new Error("AI解析がタイムアウトしました。");
+            throw new Error("AI analysis timed out.");
         }
 
+        /**
+         * Converts the text in inputArea to a visible HTML table for previewing and copying
+         */
         function processInput() {
             const input = inputArea.value;
             const output = document.getElementById('output');
             const resultContainer = document.getElementById('resultContainer');
             const copyBtn = document.getElementById('copyBtn');
 
+            if (!input.trim()) return;
+
             const lines = input.split(/\r?\n/).filter(line => line.trim() !== "");
             
-            // table要素を構築する
             let tableHtml = '<table class="spreadsheet-table"><tbody>';
             
             lines.forEach(line => {
-                // タブ文字で分割してセル(td)を作成する
                 const cells = line.split('\t');
                 tableHtml += '<tr>';
                 cells.forEach(cellText => {
@@ -184,12 +192,19 @@
             copyBtn.classList.remove('hidden');
         }
 
+        /**
+         * Helper to escape HTML characters
+         */
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
 
+        /**
+         * Copies the generated HTML table to the clipboard. 
+         * Spreadsheets like Excel/Google Sheets recognize HTML tables and paste them into cells automatically.
+         */
         function copyResult() {
             const output = document.getElementById('output');
             
@@ -200,8 +215,7 @@
             selection.addRange(range);
             
             try {
-                // tableタグが含まれるHTMLとしてコピーされるため、
-                // スプレッドシート側で「行列」として正しく解釈されるようになります。
+                // Using execCommand to ensure broad compatibility with HTML-formatted clipboard data
                 document.execCommand('copy');
                 const btn = document.getElementById('copyBtn');
                 btn.innerText = "コピー完了！";
