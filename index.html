@@ -6,75 +6,122 @@
     <title>AI PDF to Spreadsheet Formatter</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        /* スプレッドシートのようなグリッド表示のためのスタイル */
         .spreadsheet-table {
             border-collapse: collapse;
             width: 100%;
             background-color: #fff;
+            border: 2px solid #e2e8f0;
         }
         .spreadsheet-cell {
-            border: 1px solid #e0e0e0;
-            padding: 8px 12px;
-            min-height: 1.5em;
+            border: 1px solid #cbd5e1;
+            padding: 10px;
+            min-width: 80px;
             word-break: break-all;
             white-space: pre-wrap;
+            font-family: ui-sans-serif, system-ui, sans-serif;
+        }
+        .spreadsheet-row:nth-child(even) {
+            background-color: #f8fafc;
         }
         .loading-spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #059669;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #10b981;
             border-radius: 50%;
-            width: 24px;
-            height: 24px;
+            width: 32px;
+            height: 32px;
             animation: spin 1s linear infinite;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* カスタムスクロールバー */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen p-4 md:p-8">
-    <div class="max-w-4xl mx-auto bg-white rounded-xl shadow-md overflow-hidden p-6">
-        <h1 class="text-2xl font-bold text-gray-800 mb-4 flex items-center">
-            <svg class="w-8 h-8 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-            </svg>
-            AI文字起こし ➔ スプレッドシート変換（完全単一ファイル版）
-        </h1>
-
-        <div id="dropZone" class="mb-6 border-2 border-dashed border-gray-300 rounded-lg p-8 text-center transition-colors duration-200 cursor-pointer hover:border-green-500">
-            <input type="file" id="fileInput" class="hidden" accept="application/pdf,image/*">
-            <div class="flex flex-col items-center">
-                <svg class="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+<body class="bg-slate-50 min-h-screen p-4 md:p-10 text-slate-800">
+    <div class="max-w-5xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
+        <header class="bg-slate-900 p-6 text-white">
+            <h1 class="text-2xl font-bold flex items-center gap-3">
+                <svg class="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                 </svg>
-                <p class="text-gray-600 font-medium">PDFまたは画像をアップロード</p>
-                <p class="text-gray-400 text-sm mt-1">AIが表構造を解析して列を分けます</p>
-                <div id="loader" class="mt-4 flex items-center gap-2 hidden">
-                    <div class="loading-spinner"></div>
-                    <span class="text-green-600 font-bold">AI解析中...</span>
+                PDF/画像 ➔ スプレッドシート変換
+            </h1>
+            <p class="text-slate-400 mt-1 text-sm">AIがレイアウトを解析し、セルに分かれた形式で抽出します</p>
+        </header>
+
+        <main class="p-6 md:p-8">
+            <!-- アップロードエリア -->
+            <div id="dropZone" class="mb-8 border-3 border-dashed border-slate-300 rounded-xl p-10 text-center transition-all duration-300 cursor-pointer hover:border-emerald-500 hover:bg-emerald-50 group">
+                <input type="file" id="fileInput" class="hidden" accept="application/pdf,image/*">
+                <div class="flex flex-col items-center">
+                    <div class="p-4 bg-slate-100 rounded-full group-hover:bg-emerald-100 transition-colors">
+                        <svg class="w-12 h-12 text-slate-500 group-hover:text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        </svg>
+                    </div>
+                    <p class="text-lg font-semibold mt-4 text-slate-700">ここにファイルをドロップ、またはクリック</p>
+                    <p class="text-slate-500 text-sm mt-1">PDF、JPG、PNGなどに対応</p>
+                    
+                    <div id="loader" class="mt-6 flex flex-col items-center gap-3 hidden">
+                        <div class="loading-spinner"></div>
+                        <span class="text-emerald-600 font-bold animate-pulse">AIがドキュメントを読み取っています...</span>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div class="mb-6">
-            <label class="block text-sm font-medium text-gray-700 mb-2 font-bold text-green-700">1. 解析・編集エリア</label>
-            <textarea id="inputArea" class="w-full h-48 p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-y font-mono text-sm overflow-x-auto" placeholder="解析結果がここに表示されます..."></textarea>
-            <p class="mt-1 text-xs text-gray-500">※表形式の場合、AIが自動で列（タブ区切り）を作成します。必要に応じてここで手動調整も可能です。</p>
-        </div>
+            <!-- 編集・解析エリア -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <div>
+                    <label class="flex items-center gap-2 text-sm font-bold text-slate-700 mb-2">
+                        <span class="bg-slate-800 text-white w-5 h-5 flex items-center justify-center rounded-full text-xs">1</span>
+                        解析テキスト (タブ区切り)
+                    </label>
+                    <textarea id="inputArea" class="w-full h-80 p-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-mono text-sm shadow-inner custom-scrollbar" placeholder="ここにAIの解析結果が表示されます..."></textarea>
+                    <div class="mt-3 flex justify-between items-center">
+                        <span class="text-[11px] text-slate-400 italic">※表の列はタブ文字で区切られます。手動で編集も可能です。</span>
+                        <button onclick="processInput()" class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold py-2 px-4 rounded transition">
+                            表示を更新
+                        </button>
+                    </div>
+                </div>
 
-        <div class="flex gap-4 mb-8">
-            <button onclick="processInput()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition duration-200 shadow-sm">
-                プレビュー更新
-            </button>
-            <button onclick="copyResult()" id="copyBtn" class="hidden bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition duration-200 shadow-sm">
-                スプレッドシート用にコピー
-            </button>
-        </div>
-
-        <div id="resultContainer" class="hidden">
-            <label class="block text-sm font-medium text-gray-700 mb-2 font-bold">2. スプレッドシート用プレビュー（コピー用）</label>
-            <div id="output" class="border border-gray-200 rounded-lg overflow-x-auto bg-gray-50 text-sm">
-                <!-- ここにtableが生成される -->
+                <div>
+                    <label class="flex items-center gap-2 text-sm font-bold text-slate-700 mb-2">
+                        <span class="bg-slate-800 text-white w-5 h-5 flex items-center justify-center rounded-full text-xs">2</span>
+                        プレビュー
+                    </label>
+                    <div id="resultContainer" class="h-80 border border-slate-300 rounded-lg overflow-auto bg-slate-50 shadow-inner custom-scrollbar relative">
+                        <div id="outputPlaceholder" class="absolute inset-0 flex items-center justify-center text-slate-400 text-sm italic p-4 text-center">
+                            ファイルをアップロードすると、ここにセルのプレビューが表示されます
+                        </div>
+                        <div id="output"></div>
+                    </div>
+                    <div class="mt-3">
+                        <button onclick="copyResult()" id="copyBtn" class="w-full hidden bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-6 rounded-lg transition shadow-md flex items-center justify-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m-1 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            スプレッドシート用にコピー
+                        </button>
+                    </div>
+                </div>
             </div>
-            <p class="mt-2 text-xs text-gray-500 italic font-medium text-blue-600">※「スプレッドシート用にコピー」ボタンを押すと、クリップボードに表形式データが保持されます。</p>
-        </div>
+        </main>
+        
+        <footer class="bg-slate-50 border-t border-slate-200 p-4 text-center">
+            <p class="text-slate-400 text-xs font-medium">Google SheetsやExcelなどのA1セルを選択して貼り付けてください。</p>
+        </footer>
     </div>
 
     <script>
@@ -84,17 +131,28 @@
         const dropZone = document.getElementById('dropZone');
         const inputArea = document.getElementById('inputArea');
         const loader = document.getElementById('loader');
+        const outputPlaceholder = document.getElementById('outputPlaceholder');
 
-        // File drop and input handling
+        // Event Listeners
         dropZone.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+        
+        // Drag and Drop Effects
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-emerald-500', 'bg-emerald-50'); });
+        dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('border-emerald-500', 'bg-emerald-50'); });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-emerald-500', 'bg-emerald-50');
+            handleFiles(e.dataTransfer.files);
+        });
 
         async function handleFiles(files) {
             const file = files[0];
             if (!file) return;
 
             loader.classList.remove('hidden');
-            inputArea.value = "AIが解析しています...";
+            inputArea.value = "AIがドキュメントの内容を解析しています...";
+            outputPlaceholder.innerText = "解析中...";
 
             try {
                 const reader = new FileReader();
@@ -110,19 +168,22 @@
                 };
             } catch (err) {
                 console.error(err);
-                alert("ファイルの読み込みに失敗しました。");
+                alert("ファイルの読み込みまたは解析に失敗しました。");
                 loader.classList.add('hidden');
+                outputPlaceholder.innerText = "エラーが発生しました";
             }
         }
 
         async function performAIOCR(base64Data, mimeType) {
+            // プロンプトを日本語での正確性と表構造の維持に特化
             const prompt = `
-            Analyze this document and extract the text in a format suitable for spreadsheets.
-            [CRITICAL RULES]
-            1. Use a TAB character (ASCII 0x09) as a column separator for tables. Do NOT write out "\\t".
-            2. Each data row must be on a single line.
-            3. Ensure consistent column counts even for complex table layouts.
-            4. Provide ONLY the extracted text. No explanations or greetings.
+            Please transcribe all text from this document accurately.
+            [LAYOUT RULES]
+            1. If there's a table, use the TAB character (ASCII 0x09) as a separator between columns.
+            2. Never write the literal characters "\\t". Use the actual invisible tab character.
+            3. Ensure each logical row of data is on a new line.
+            4. Preserve the reading order of the document.
+            5. Return ONLY the transcribed content. No headers, footers, or extra dialogue.
             `;
             
             let retries = 0;
@@ -143,16 +204,16 @@
                         })
                     });
 
-                    if (!response.ok) throw new Error("API request failed");
+                    if (!response.ok) throw new Error("API call failed");
 
                     const result = await response.json();
                     let rawText = result.candidates?.[0]?.content?.parts?.[0]?.text || "";
                     
-                    // Replace literal "\t" strings with actual tab characters if the AI made a mistake
-                    rawText = rawText.replace(/\\t/g, '\t');
+                    // Cleanup AI artifacts
+                    rawText = rawText.replace(/\\t/g, '\t'); // 文字列としての\tをタブに置換
+                    rawText = rawText.replace(/```[a-z]*\n/gi, '').replace(/```/g, '').trim();
                     
-                    // Remove markdown code blocks if present
-                    return rawText.replace(/```[a-z]*\n/gi, '').replace(/```/g, '').trim();
+                    return rawText;
                 } catch (err) {
                     await new Promise(res => setTimeout(res, delays[retries]));
                     retries++;
@@ -161,53 +222,47 @@
             throw new Error("AI analysis timed out.");
         }
 
-        /**
-         * Converts the text in inputArea to a visible HTML table for previewing and copying
-         */
         function processInput() {
             const input = inputArea.value;
             const output = document.getElementById('output');
-            const resultContainer = document.getElementById('resultContainer');
             const copyBtn = document.getElementById('copyBtn');
 
-            if (!input.trim()) return;
+            if (!input.trim()) {
+                output.innerHTML = "";
+                outputPlaceholder.classList.remove('hidden');
+                copyBtn.classList.add('hidden');
+                return;
+            }
 
+            outputPlaceholder.classList.add('hidden');
             const lines = input.split(/\r?\n/).filter(line => line.trim() !== "");
             
+            // Generate HTML Table - スプレッドシートはHTML Tableを最も正確にセルとして認識する
             let tableHtml = '<table class="spreadsheet-table"><tbody>';
-            
             lines.forEach(line => {
                 const cells = line.split('\t');
-                tableHtml += '<tr>';
+                tableHtml += '<tr class="spreadsheet-row">';
                 cells.forEach(cellText => {
                     tableHtml += `<td class="spreadsheet-cell">${escapeHtml(cellText)}</td>`;
                 });
                 tableHtml += '</tr>';
             });
-            
             tableHtml += '</tbody></table>';
 
             output.innerHTML = tableHtml;
-            resultContainer.classList.remove('hidden');
             copyBtn.classList.remove('hidden');
         }
 
-        /**
-         * Helper to escape HTML characters
-         */
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
 
-        /**
-         * Copies the generated HTML table to the clipboard. 
-         * Spreadsheets like Excel/Google Sheets recognize HTML tables and paste them into cells automatically.
-         */
         function copyResult() {
             const output = document.getElementById('output');
             
+            // HTML形式のままクリップボードに送ることで、スプレッドシートがセルの区切りを理解する
             const range = document.createRange();
             range.selectNode(output);
             const selection = window.getSelection();
@@ -215,17 +270,25 @@
             selection.addRange(range);
             
             try {
-                // Using execCommand to ensure broad compatibility with HTML-formatted clipboard data
-                document.execCommand('copy');
-                const btn = document.getElementById('copyBtn');
-                btn.innerText = "コピー完了！";
-                btn.classList.replace('bg-blue-600', 'bg-green-500');
-                setTimeout(() => { 
-                    btn.innerText = "スプレッドシート用にコピー"; 
-                    btn.classList.replace('bg-green-500', 'bg-blue-600');
-                }, 2000);
+                const success = document.execCommand('copy');
+                if (success) {
+                    const btn = document.getElementById('copyBtn');
+                    const originalText = btn.innerHTML;
+                    btn.innerHTML = `
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                        コピーしました！
+                    `;
+                    btn.classList.replace('bg-emerald-600', 'bg-slate-700');
+                    setTimeout(() => { 
+                        btn.innerHTML = originalText;
+                        btn.classList.replace('bg-slate-700', 'bg-emerald-600');
+                    }, 2000);
+                }
             } catch (err) {
-                console.error('Copy failed', err);
+                console.error('Copy error:', err);
+                alert("コピーに失敗しました。プレビュー範囲を手動で選択してコピーしてください。");
             }
             selection.removeAllRanges();
         }
